@@ -1,23 +1,21 @@
-import json
+from __future__ import absolute_import
 
-from .fn import (
-  compose,  curry,  fmap, flat_map, merge
-)
+import itertools
 
-@curry
+from . import compat
+
+
 def do_push(client, images):
-  return flat_map(push(client), images)
-  
-@curry
-def push(client, (image, tag)):
-  return fmap(
-    compose(
-      merge(dict(event="push", image=image)),
-      json.loads,
-    ),
-    client.push(
-      image,
-      tag, 
-      stream=True
-    )
-  )
+    push_results = [push(client, image) for image in images]
+    for evt in itertools.chain.from_iterable(push_results):
+        yield evt
+
+
+def push(client, image_tag):
+    image, tag = image_tag
+    extra = {'event': 'push', 'image': image}
+
+    for evt in client.push(image, tag, stream=True):
+        d = compat.json_loads(evt)
+        d.update(extra)
+        yield d
